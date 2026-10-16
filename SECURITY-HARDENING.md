@@ -36,3 +36,4 @@ This is an independently maintained, security-hardened fork of a **retired** Ope
 - A verified Git commit is not proof that a published npm tarball contains the same code. The original npm package is **not** the binary/artifact of this fork.
 - This review did not include a production traffic interception test, third-party dependency source audits, or validation against an actual paid Claude account. Do not assume zero risk.
 - Anthropic's subscription terms and permitted usage can change independently of this fork.
+- `pnpm audit --prod` still reports `GHSA-ch52-4w7c-c8xp` (high) through `@opencode/plugin > @opencode/util > @npmcli/arborist > npm-registry-fetch > make-fetch-happen > http-cache-semantics`. The audit reports no patched version. The vulnerable caching path has not been shown reachable from ordinary Claude requests, but that is **not** a guarantee. The upgraded OpenCode 2.0.31 dependency resolves the earlier OpenTelemetry advisory.

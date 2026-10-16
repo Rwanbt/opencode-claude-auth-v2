@@ -1,10 +1,17 @@
 # opencode-claude-auth-v2
 
+> **Security-hardened personal fork (Rwanbt):** See [SECURITY-HARDENING.md](SECURITY-HARDENING.md)
+> for the threat model, verified fixes, residual risks and local installation.
+> **Do not install `opencode-claude-auth-v2@latest`** expecting these changes:
+> that npm package is not published by this security fork. Install the reviewed
+> checkout locally instead, after a successful build.
+
 > **Retired: use [`opencode-claude-auth`](https://github.com/griffinmartin/opencode-claude-auth) instead.**
 > OpenCode 2 support was merged upstream in [PR #274](https://github.com/griffinmartin/opencode-claude-auth/pull/274)
-> and released in **3.0.0**. This fork will receive no further updates.
+> and released in **3.0.0**. The original `heymaaz` fork is retired;
+> this independent fork contains security fixes but is not a maintained upstream release.
 
-## Migrate to upstream
+## Original upstream migration path (not the audited fork installation)
 
 1. In your OpenCode configuration, replace `opencode-claude-auth-v2` (including pinned versions or local checkout paths)
    with `opencode-claude-auth@latest`. Preserve your other plugins and settings; **do not load both packages**.

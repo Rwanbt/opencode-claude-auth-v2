@@ -7,6 +7,8 @@ on:
 
 jobs:
   publish:
+    # The personal fork never publishes under the upstream npm package name.
+    if: github.repository == 'heymaaz/opencode-claude-auth-v2'
     runs-on: ubuntu-latest
     permissions:
       contents: read
