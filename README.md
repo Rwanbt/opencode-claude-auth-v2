@@ -1,5 +1,39 @@
 # opencode-claude-auth-v2
 
+> **Retired: use [`opencode-claude-auth`](https://github.com/griffinmartin/opencode-claude-auth) instead.**
+> OpenCode 2 support was merged upstream in [PR #274](https://github.com/griffinmartin/opencode-claude-auth/pull/274)
+> and released in **3.0.0**. This fork will receive no further updates.
+
+## Migrate to upstream
+
+1. In your OpenCode configuration, replace `opencode-claude-auth-v2` (including pinned versions or local checkout paths)
+   with `opencode-claude-auth@latest`. Preserve your other plugins and settings; **do not load both packages**.
+
+   ```jsonc
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "plugins": ["opencode-claude-auth@latest"],
+   }
+   ```
+
+2. Restart OpenCode. If subscription authentication needs reconnecting, run `/connect`, choose **Anthropic**, then
+   **Import Claude Code subscription**. Your existing Claude Code credentials can be imported from this device.
+3. Keep existing `anthropic/<model>` references. Report future issues to the
+   [upstream repository](https://github.com/griffinmartin/opencode-claude-auth/issues).
+
+No separate `npm install` is needed for a package configured in OpenCode's `plugins` list.
+Existing fork installations are not automatically migrated and are not being unpublished.
+For OpenCode 1, use `opencode-claude-auth@2.2.1`, not upstream `@latest`.
+
+See the [upstream installation instructions](https://github.com/griffinmartin/opencode-claude-auth/blob/main/installation.md)
+for current guidance.
+
+---
+
+## Historical fork documentation
+
+The instructions below are retained for reference only and are superseded by the migration guidance above.
+
 Use an existing Claude Code Pro or Max subscription in the OpenCode 2 beta.
 
 This is an OpenCode 2-only fork of

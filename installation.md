@@ -1,5 +1,16 @@
 # Install opencode-claude-auth-v2
 
+> **This fork is retired. Do not install it for new setups.** OpenCode 2 support is available in
+> [`opencode-claude-auth@latest`](https://www.npmjs.com/package/opencode-claude-auth) (3.0.0 or newer).
+> Replace this fork's package entry or local checkout path with `opencode-claude-auth@latest` in your `plugins` list,
+> preserving other entries. Do not load both. Restart OpenCode and, if needed, run `/connect` → **Anthropic** →
+> **Import Claude Code subscription**.
+>
+> Follow the [current upstream installation instructions](https://github.com/griffinmartin/opencode-claude-auth/blob/main/installation.md)
+> and this fork's [migration guide](README.md#migrate-to-upstream). OpenCode 1 users should pin upstream `2.2.1` instead.
+
+## Historical instructions (superseded)
+
 These instructions target OpenCode 2 only.
 
 ## Prerequisites
