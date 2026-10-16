@@ -51,7 +51,7 @@
     }
   },
   "scripts": {
-    "build": "rm -rf dist && tsc && cp src/anthropic-prompt.txt dist/",
+    "build": "node scripts/build.mjs",
     "test": "node --test --experimental-strip-types src/**/*.test.ts scripts/**/*.test.ts",
     "test:isolated": "sh scripts/test-isolated.sh",
     "test:headless": "pnpm run build && node --experimental-strip-types scripts/test-headless.ts",
@@ -66,10 +66,10 @@
     "prepublishOnly": "pnpm run build && pnpm run test:isolated"
   },
   "dependencies": {
-    "@opencode/plugin": "latest"
+    "@opencode/plugin": "2.0.5"
   },
   "devDependencies": {
-    "@opencode/client": "latest",
+    "@opencode/client": "2.0.5",
     "@types/node": "^25.5.0",
     "oxfmt": "0.41.0",
     "oxlint": "1.56.0",

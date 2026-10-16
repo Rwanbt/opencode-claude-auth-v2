@@ -23,6 +23,19 @@ import {
   writeBackCredentials,
 } from "./keychain.ts"
 
+// Node's os.homedir() uses USERPROFILE on Windows, not HOME. Prevent tests
+// from reading the developer's real Claude credentials on that platform.
+const originalUserProfile = process.env.USERPROFILE
+afterEach(() => {
+  if (originalUserProfile === undefined) delete process.env.USERPROFILE
+  else process.env.USERPROFILE = originalUserProfile
+})
+
+function setTestHome(path: string): void {
+  process.env.HOME = path
+  if (process.platform === "win32") process.env.USERPROFILE = path
+}
+
 // Mirrors listClaudeKeychainServices regex logic for unit testing
 type MockedKeychain = {
   readAllClaudeAccounts: () => Array<{
@@ -363,7 +376,7 @@ describe("readAllClaudeAccounts", () => {
       },
     })
 
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const { readAllClaudeAccounts } = await loadKeychainWithMockedSecurity(
@@ -420,7 +433,7 @@ describe("readAllClaudeAccounts", () => {
     writeFileSync(join(primaryDir, ".claude.json"), JSON.stringify({}))
     writeFileSync(join(workDir, ".claude.json"), JSON.stringify({}))
 
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const { readAllClaudeAccounts } = await loadKeychainWithMockedSecurity(
@@ -460,7 +473,7 @@ describe("readAllClaudeAccounts", () => {
     mkdirSync(primaryDir, { recursive: true })
     writeFileSync(join(primaryDir, ".claude.json"), JSON.stringify({}))
 
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const { readAllClaudeAccounts } = await loadKeychainWithMockedSecurity(
@@ -655,7 +668,7 @@ describe("writeBackCredentials (file source)", () => {
   it("reads, updates, and writes back credentials to file", async () => {
     const originalHome = process.env.HOME
     const tempHome = await mkdtemp(join(tmpdir(), "opencode-claude-auth-wb-"))
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const claudeDir = join(tempHome, ".claude")
@@ -697,7 +710,7 @@ describe("writeBackCredentials (file source)", () => {
   it("writes when the stored token still matches the expected one", async () => {
     const originalHome = process.env.HOME
     const tempHome = await mkdtemp(join(tmpdir(), "opencode-claude-auth-cas-"))
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const claudeDir = join(tempHome, ".claude")
@@ -744,7 +757,7 @@ describe("writeBackCredentials (file source)", () => {
   it("skips the write when the stored token is no longer the expected one", async () => {
     const originalHome = process.env.HOME
     const tempHome = await mkdtemp(join(tmpdir(), "opencode-claude-auth-cas-"))
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const claudeDir = join(tempHome, ".claude")
@@ -798,7 +811,7 @@ describe("writeBackCredentials (file source)", () => {
     const tempHome = await mkdtemp(
       join(tmpdir(), "opencode-claude-auth-wb-perms-"),
     )
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const claudeDir = join(tempHome, ".claude")
@@ -834,7 +847,7 @@ describe("writeBackCredentials (file source)", () => {
     const tempHome = await mkdtemp(
       join(tmpdir(), "opencode-claude-auth-wb-missing-"),
     )
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const result = writeBackCredentials("file", {
@@ -858,7 +871,7 @@ describe("writeBackCredentials (file source)", () => {
     const tempHome = await mkdtemp(
       join(tmpdir(), "opencode-claude-auth-wb-invalid-"),
     )
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
 
     try {
       const claudeDir = join(tempHome, ".claude")
@@ -890,7 +903,7 @@ describe("writeBackCredentials (file source)", () => {
     const configDir = await mkdtemp(
       join(tmpdir(), "opencode-claude-auth-wb-cfg-"),
     )
-    process.env.HOME = tempHome
+    setTestHome(tempHome)
     process.env.CLAUDE_CONFIG_DIR = configDir
 
     try {
@@ -1094,7 +1107,7 @@ describe("CLAUDE_CONFIG_DIR support", () => {
       makeCreds("default-token"),
     )
 
-    process.env.HOME = fakeHome
+    setTestHome(fakeHome)
 
     try {
       const creds = readCredentialsFile()

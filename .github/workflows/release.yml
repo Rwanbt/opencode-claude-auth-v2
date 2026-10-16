@@ -13,6 +13,8 @@ permissions:
 
 jobs:
   release:
+    # Personal forks must never accidentally publish under the upstream npm name.
+    if: github.repository == 'heymaaz/opencode-claude-auth-v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
