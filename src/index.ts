@@ -2,6 +2,18 @@ import { Plugin, Provider } from "@opencode/plugin"
 import type { IntegrationOAuthMethodRegistration } from "@opencode/plugin/promise/integration"
 import type { SessionRequest } from "@opencode/plugin/promise/session"
 import {
+  AUTO_LOGIN_INSTRUCTIONS,
+  defaultHasAccounts,
+  describeAuthorizeFailure,
+  describeRefreshFailure,
+  failureCallback,
+  IMPORT_FAILURE_INSTRUCTIONS,
+  spawnClaudeLogin,
+  waitForClaudeCodeLogin,
+} from "./auto-login.ts"
+import {
+  getAccountBySource,
+  getActiveRefreshFailureKind,
   initAccounts,
   loadPersistedAccountSource,
   setActiveAccountSource,
@@ -53,20 +65,122 @@ export function injectClaudeIdentity(event: SessionRequest): void {
   event.system.unshift({ type: "text", text: SYSTEM_IDENTITY })
 }
 
-function oauth(accounts: ReturnType<typeof readAllClaudeAccounts>) {
+type NeedsAuthStatus = { status: "needs_auth"; message: string }
+type ConnectionStatusWriter = (
+  status: NeedsAuthStatus | undefined,
+) => Promise<void>
+
+function oauth(
+  accounts: ReturnType<typeof readAllClaudeAccounts>,
+  setNeedsAuth: ConnectionStatusWriter,
+) {
   return {
     integrationID: INTEGRATION_ID,
     method: oauthMethodDescriptor(accounts),
     authorize: async (inputs) => {
-      const value = await authorizeOAuth(inputs, accounts, realOAuthDeps)
+      let current: ReturnType<typeof readAllClaudeAccounts> = []
+      try {
+        current = readAllClaudeAccounts()
+      } catch (cause) {
+        log("authorize_keychain_read_failed", { cause: String(cause) })
+      }
+
+      if (current.length > 0) {
+        try {
+          const value = await authorizeOAuth(inputs, current, realOAuthDeps)
+          await setNeedsAuth(undefined)
+          return {
+            mode: "auto" as const,
+            url: "",
+            instructions: "Claude Code credentials imported from this device.",
+            callback: Promise.resolve(value),
+          }
+        } catch (cause) {
+          log("authorize_import_failed", { cause: String(cause) })
+          return {
+            mode: "auto" as const,
+            url: "",
+            instructions: IMPORT_FAILURE_INSTRUCTIONS,
+            callback: failureCallback(
+              new Error(describeAuthorizeFailure(cause)),
+            ),
+          }
+        }
+      }
+
+      // No Claude Code credentials on this device yet: start the official
+      // login so the user only has to authorize in the browser.
+      const login = spawnClaudeLogin()
+      if (!login) {
+        return {
+          mode: "auto" as const,
+          url: "",
+          instructions: IMPORT_FAILURE_INSTRUCTIONS,
+          callback: failureCallback(
+            new Error(
+              describeAuthorizeFailure(
+                new Error(
+                  "Claude Code CLI was not found. Install it, run `claude auth login`, then reconnect.",
+                ),
+              ),
+            ),
+          ),
+        }
+      }
+
       return {
         mode: "auto" as const,
         url: "",
-        instructions: "Claude Code credentials imported from this device.",
-        callback: Promise.resolve(value),
+        instructions: AUTO_LOGIN_INSTRUCTIONS,
+        expiresAt: Date.now() + 5 * 60_000,
+        callback: (async () => {
+          try {
+            const signedIn = await waitForClaudeCodeLogin({
+              hasAccounts: defaultHasAccounts,
+              exited: () => login.exitedCode(),
+            })
+            if (!signedIn) {
+              throw new Error(
+                "Claude Code sign-in did not complete in time. Run `claude auth login`, then reconnect.",
+              )
+            }
+            const fileAccounts = readAllClaudeAccounts()
+            const value = await authorizeOAuth(
+              inputs,
+              fileAccounts,
+              realOAuthDeps,
+            )
+            await setNeedsAuth(undefined)
+            return value
+          } catch (cause) {
+            log("authorize_auto_login_failed", { cause: String(cause) })
+            throw new Error(describeAuthorizeFailure(cause), { cause })
+          } finally {
+            login.kill()
+          }
+        })(),
       }
     },
-    refresh: (value) => refreshOAuthCredential(value, realOAuthDeps),
+    refresh: async (value) => {
+      try {
+        const refreshed = await refreshOAuthCredential(value, realOAuthDeps)
+        await setNeedsAuth(undefined)
+        return refreshed
+      } catch (cause) {
+        const source =
+          typeof value.metadata?.source === "string"
+            ? value.metadata.source
+            : undefined
+        const account = source ? getAccountBySource(source) : null
+        if (getActiveRefreshFailureKind(account) === "terminal") {
+          await setNeedsAuth({
+            status: "needs_auth",
+            message: describeRefreshFailure(),
+          })
+        }
+        throw cause
+      }
+    },
     label: (value) => labelOAuthCredential(value),
   } satisfies IntegrationOAuthMethodRegistration
 }
@@ -85,11 +199,26 @@ export const ClaudeAuthPlugin = Plugin.define({
     const selected = loadPersistedAccountSource() ?? accounts[0]?.source
     if (selected) setActiveAccountSource(selected)
 
+    const setNeedsAuth: ConnectionStatusWriter = async (status) => {
+      try {
+        const connection =
+          await ctx.integration.connection.active(INTEGRATION_ID)
+        if (!connection) return
+        await ctx.integration.connection.status({
+          integrationID: INTEGRATION_ID,
+          connection,
+          status,
+        })
+      } catch (cause) {
+        log("connection_status_failed", { cause: String(cause) })
+      }
+    }
+
     await ctx.integration.transform((draft) => {
       draft.update(INTEGRATION_ID, (integration) => {
         integration.name = "Anthropic"
       })
-      draft.method.update(oauth(accounts))
+      draft.method.update(oauth(accounts, setNeedsAuth))
     })
 
     // The Anthropic integration keeps its built-in API-key method alongside

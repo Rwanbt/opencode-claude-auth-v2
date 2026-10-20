@@ -1,4 +1,7 @@
 import assert from "node:assert/strict"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { describe, it } from "node:test"
 import plugin, {
   IDENTITY_REQUEST_HOOKS,
@@ -119,36 +122,48 @@ describe("native provider HTTP hooks", () => {
         },
       },
     }
-    const dispose = await plugin.setup(ctx as never)
+    const emptyConfigDir = mkdtempSync(join(tmpdir(), "claude-auth-test-"))
+    const previousConfigDir = process.env.CLAUDE_CONFIG_DIR
+    process.env.CLAUDE_CONFIG_DIR = emptyConfigDir
     try {
-      assert.equal(provider.package, "@opencode/ai/providers/anthropic")
-      assert.equal(model.package, "@opencode/ai/providers/anthropic")
-      const event = {
-        model: { providerID: "anthropic" },
-        request: nativeRequest(),
-      }
-      await hooks.get("http.request")!(event)
-      assert.equal(event.request.headers.get("x-api-key"), "sk-test")
-      assert.equal(event.request.headers.has("authorization"), false)
+      const dispose = await plugin.setup(ctx as never)
+      try {
+        assert.equal(provider.package, "@opencode/ai/providers/anthropic")
+        assert.equal(model.package, "@opencode/ai/providers/anthropic")
+        const event = {
+          model: { providerID: "anthropic" },
+          request: nativeRequest(),
+        }
+        await hooks.get("http.request")!(event)
+        assert.equal(event.request.headers.get("x-api-key"), "sk-test")
+        assert.equal(event.request.headers.has("authorization"), false)
 
-      credential = {
-        type: "oauth",
-        methodID: METHOD_ID,
-        access: "subscription-token",
-        metadata: { [CLAUDE_CODE_OAUTH_METADATA_KEY]: "v1" },
+        credential = {
+          type: "oauth",
+          methodID: METHOD_ID,
+          access: "subscription-token",
+          metadata: { [CLAUDE_CODE_OAUTH_METADATA_KEY]: "v1" },
+        }
+        event.request = nativeRequest()
+        await hooks.get("http.request")!(event)
+        assert.equal(
+          event.request.headers.get("authorization"),
+          "Bearer subscription-token",
+        )
+        assert.equal(event.request.headers.has("x-api-key"), false)
+        const response = { ...event, response: new Response("ok") }
+        await hooks.get("http.response")!(response)
+        assert.equal(await response.response.text(), "ok")
+      } finally {
+        await dispose?.()
       }
-      event.request = nativeRequest()
-      await hooks.get("http.request")!(event)
-      assert.equal(
-        event.request.headers.get("authorization"),
-        "Bearer subscription-token",
-      )
-      assert.equal(event.request.headers.has("x-api-key"), false)
-      const response = { ...event, response: new Response("ok") }
-      await hooks.get("http.response")!(response)
-      assert.equal(await response.response.text(), "ok")
     } finally {
-      await dispose?.()
+      if (previousConfigDir === undefined) {
+        delete process.env.CLAUDE_CONFIG_DIR
+      } else {
+        process.env.CLAUDE_CONFIG_DIR = previousConfigDir
+      }
+      rmSync(emptyConfigDir, { recursive: true, force: true })
     }
   })
 })
