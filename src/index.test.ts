@@ -115,6 +115,10 @@ describe("native provider HTTP hooks", () => {
           }),
         reload: async () => {},
       },
+      model: {
+        transform: async () => {},
+        reload: async () => {},
+      },
       event: { subscribe: async function* () {} },
       session: {
         hook: async (kind: string, hook: (event: any) => Promise<void>) => {

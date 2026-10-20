@@ -37,6 +37,7 @@ import {
   refreshOAuthCredential,
   resolveAuthorizeSource,
 } from "./oauth-method.ts"
+import { shadowedSnapshotIDs } from "./model-filter.ts"
 import { finishClaudeResponse, prepareClaudeRequest } from "./provider.ts"
 
 export * from "./betas.ts"
@@ -293,6 +294,23 @@ export const ClaudeAuthPlugin = Plugin.define({
     }
     await loadConnection()
 
+    // Models follow the integration's connection state: no connection means no
+    // selectable Anthropic models, and a connected account keeps one entry per
+    // model instead of alias + dated snapshot pairs.
+    let connected = true
+    const loadConnected = async () => {
+      try {
+        const result = await ctx.integration.get({
+          integrationID: INTEGRATION_ID,
+        })
+        connected = (result.data.connections ?? []).length > 0
+      } catch (cause) {
+        connected = true
+        log("connection_count_failed", { cause: String(cause) })
+      }
+    }
+    await loadConnected()
+
     await ctx.provider.transform((provider) => {
       const anthropic = provider.get(PROVIDER_ID)
       if (!anthropic) return
@@ -305,6 +323,17 @@ export const ClaudeAuthPlugin = Plugin.define({
           if (subscription) model.cost = []
         })
       }
+    })
+
+    await ctx.model.transform((editor) => {
+      const models = editor.list("anthropic")
+      if (models.length === 0) return
+      if (!connected) {
+        for (const model of models) editor.remove("anthropic", String(model.id))
+        return
+      }
+      const ids = models.map((model) => String(model.id))
+      for (const id of shadowedSnapshotIDs(ids)) editor.remove("anthropic", id)
     })
 
     // Re-evaluate when the user switches credentials so the provider follows
@@ -320,8 +349,11 @@ export const ClaudeAuthPlugin = Plugin.define({
             event.data.integrationID === INTEGRATION_ID)
         ) {
           const before: boolean = subscription
+          const beforeConnected: boolean = connected
           await loadConnection()
+          await loadConnected()
           if (subscription !== before) await ctx.provider.reload()
+          if (connected !== beforeConnected) await ctx.model.reload()
         }
       }
     })().catch((cause) => {
