@@ -10,6 +10,25 @@ export const AUTO_LOGIN_INSTRUCTIONS =
 export const IMPORT_FAILURE_INSTRUCTIONS =
   "Claude Code credentials could not be imported."
 
+/**
+ * Every authorization attempt must carry a parseable absolute URL: the desktop
+ * dialog runs `new URL(url)` unconditionally (and appends its own query
+ * parameters) before it can render the attempt, so an empty string crashes the
+ * whole connect dialog. The official CLI opens the browser itself; this link is
+ * only the dialog's fallback destination.
+ */
+export const AUTHORIZATION_URL = "https://claude.ai/"
+
+/** Builds the shared fields of an `auto` authorization attempt. */
+export function attemptBase(instructions: string, expiresAt?: number) {
+  return {
+    mode: "auto" as const,
+    url: AUTHORIZATION_URL,
+    instructions,
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+  }
+}
+
 const AUTO_LOGIN_WINDOW_MS = 5 * 60_000
 const POLL_INTERVAL_MS = 2_000
 

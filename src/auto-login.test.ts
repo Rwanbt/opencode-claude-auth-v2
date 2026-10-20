@@ -2,12 +2,29 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import type { spawn } from "node:child_process"
 import {
+  attemptBase,
+  AUTHORIZATION_URL,
   describeAuthorizeFailure,
   describeRefreshFailure,
   failureCallback,
   spawnClaudeLogin,
   waitForClaudeCodeLogin,
 } from "./auto-login.ts"
+
+describe("authorization attempt", () => {
+  it("always carries a parseable absolute URL for the desktop dialog", () => {
+    const attempt = attemptBase("import")
+    assert.equal(attempt.mode, "auto")
+    assert.match(AUTHORIZATION_URL, /^https:\/\//)
+    assert.doesNotThrow(() => new URL(attempt.url))
+    assert.doesNotThrow(() => new URL(AUTHORIZATION_URL))
+  })
+
+  it("keeps the expiry only when provided", () => {
+    assert.equal(attemptBase("login", 123).expiresAt, 123)
+    assert.equal(attemptBase("login").expiresAt, undefined)
+  })
+})
 
 describe("waitForClaudeCodeLogin", () => {
   it("resolves true as soon as credentials appear", async () => {

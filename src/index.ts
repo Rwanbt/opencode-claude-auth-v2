@@ -2,6 +2,7 @@ import { Plugin, Provider } from "@opencode/plugin"
 import type { IntegrationOAuthMethodRegistration } from "@opencode/plugin/promise/integration"
 import type { SessionRequest } from "@opencode/plugin/promise/session"
 import {
+  attemptBase,
   AUTO_LOGIN_INSTRUCTIONS,
   defaultHasAccounts,
   describeAuthorizeFailure,
@@ -90,17 +91,15 @@ function oauth(
           const value = await authorizeOAuth(inputs, current, realOAuthDeps)
           await setNeedsAuth(undefined)
           return {
-            mode: "auto" as const,
-            url: "",
-            instructions: "Claude Code credentials imported from this device.",
+            ...attemptBase(
+              "Claude Code credentials imported from this device.",
+            ),
             callback: Promise.resolve(value),
           }
         } catch (cause) {
           log("authorize_import_failed", { cause: String(cause) })
           return {
-            mode: "auto" as const,
-            url: "",
-            instructions: IMPORT_FAILURE_INSTRUCTIONS,
+            ...attemptBase(IMPORT_FAILURE_INSTRUCTIONS),
             callback: failureCallback(
               new Error(describeAuthorizeFailure(cause)),
             ),
@@ -113,9 +112,7 @@ function oauth(
       const login = spawnClaudeLogin()
       if (!login) {
         return {
-          mode: "auto" as const,
-          url: "",
-          instructions: IMPORT_FAILURE_INSTRUCTIONS,
+          ...attemptBase(IMPORT_FAILURE_INSTRUCTIONS),
           callback: failureCallback(
             new Error(
               describeAuthorizeFailure(
@@ -129,10 +126,7 @@ function oauth(
       }
 
       return {
-        mode: "auto" as const,
-        url: "",
-        instructions: AUTO_LOGIN_INSTRUCTIONS,
-        expiresAt: Date.now() + 5 * 60_000,
+        ...attemptBase(AUTO_LOGIN_INSTRUCTIONS, Date.now() + 5 * 60_000),
         callback: (async () => {
           try {
             const signedIn = await waitForClaudeCodeLogin({
