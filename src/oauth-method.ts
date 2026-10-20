@@ -113,6 +113,44 @@ export function resolveAuthorizeSource(
   )
 }
 
+/** Instructions shown when the selected account is already connected. */
+export const ALREADY_CONNECTED_INSTRUCTIONS =
+  "This Claude Code account is already connected."
+
+/** User-facing message for a redundant connection attempt. */
+export function describeAlreadyConnected(source: string): string {
+  return `Claude Code account "${source}" is already connected to Anthropic. Use the existing account, or disconnect it first if you want to reconnect.`
+}
+
+/** Metadata source of a credential created by this plugin, when it is one. */
+export function credentialSource(
+  value:
+    | {
+        type?: string
+        methodID?: string
+        metadata?: Record<string, unknown>
+      }
+    | undefined,
+): string | undefined {
+  if (!value || value.type !== "oauth" || value.methodID !== METHOD_ID)
+    return undefined
+  return typeof value.metadata?.source === "string"
+    ? value.metadata.source
+    : undefined
+}
+
+/** Whether the selected Claude Code account is already connected. */
+export function isSourceConnected(
+  existingSources: Iterable<string>,
+  source: string | undefined,
+): boolean {
+  if (source === undefined) return false
+  for (const existing of existingSources) {
+    if (existing === source) return true
+  }
+  return false
+}
+
 export async function buildOAuthCredential(
   source: string,
   deps: OAuthDeps,

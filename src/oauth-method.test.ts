@@ -6,7 +6,11 @@ import {
   buildOAuthCredential,
   CLAUDE_CODE_OAUTH_METADATA_KEY,
   CLAUDE_CODE_OAUTH_METADATA_VALUE,
+  credentialSource,
+  describeAlreadyConnected,
+  isSourceConnected,
   labelOAuthCredential,
+  METHOD_ID,
   oauthMethodDescriptor,
   refreshOAuthCredential,
   resolveAuthorizeSource,
@@ -562,5 +566,43 @@ describe("labelOAuthCredential", () => {
 
   it("returns undefined when the label is not a string", () => {
     assert.equal(labelOAuthCredential({ metadata: { label: 42 } }), undefined)
+  })
+})
+
+describe("duplicate connection guard", () => {
+  it("recognises a credential created by this plugin", () => {
+    assert.equal(
+      credentialSource({
+        type: "oauth",
+        methodID: METHOD_ID,
+        metadata: { source: "file" },
+      }),
+      "file",
+    )
+  })
+
+  it("ignores other credentials and malformed metadata", () => {
+    assert.equal(
+      credentialSource({ type: "key", metadata: { source: "file" } }),
+      undefined,
+    )
+    assert.equal(
+      credentialSource({ type: "oauth", methodID: METHOD_ID, metadata: {} }),
+      undefined,
+    )
+    assert.equal(credentialSource(undefined), undefined)
+  })
+
+  it("detects a connected source", () => {
+    assert.equal(isSourceConnected(["file"], "file"), true)
+    assert.equal(isSourceConnected(["file"], "other"), false)
+    assert.equal(isSourceConnected(["file"], undefined), false)
+    assert.equal(isSourceConnected([], "file"), false)
+  })
+
+  it("explains the redundant connection and how to proceed", () => {
+    const message = describeAlreadyConnected("file")
+    assert.match(message, /already connected/)
+    assert.match(message, /disconnect it first/)
   })
 })

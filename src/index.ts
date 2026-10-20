@@ -22,15 +22,20 @@ import {
 import { readAllClaudeAccounts } from "./keychain.ts"
 import { initLogger, log } from "./logger.ts"
 import {
+  ALREADY_CONNECTED_INSTRUCTIONS,
   authorizeOAuth,
   CLAUDE_CODE_OAUTH_METADATA_KEY,
   CLAUDE_CODE_OAUTH_METADATA_VALUE,
+  credentialSource,
+  describeAlreadyConnected,
   INTEGRATION_ID,
+  isSourceConnected,
   labelOAuthCredential,
   METHOD_ID,
   oauthMethodDescriptor,
   realOAuthDeps,
   refreshOAuthCredential,
+  resolveAuthorizeSource,
 } from "./oauth-method.ts"
 import { finishClaudeResponse, prepareClaudeRequest } from "./provider.ts"
 
@@ -74,6 +79,7 @@ type ConnectionStatusWriter = (
 function oauth(
   accounts: ReturnType<typeof readAllClaudeAccounts>,
   setNeedsAuth: ConnectionStatusWriter,
+  connectedSources: () => Promise<string[]>,
 ) {
   return {
     integrationID: INTEGRATION_ID,
@@ -85,6 +91,25 @@ function oauth(
       } catch (cause) {
         log("authorize_keychain_read_failed", { cause: String(cause) })
       }
+
+      const isConnected = async (source: string | undefined) =>
+        source !== undefined &&
+        isSourceConnected(await connectedSources(), source)
+
+      const rejectIfConnected = async (source: string | undefined) => {
+        if (source === undefined || !(await isConnected(source))) return null
+        return {
+          ...attemptBase(ALREADY_CONNECTED_INSTRUCTIONS),
+          callback: failureCallback(
+            new Error(describeAlreadyConnected(source)),
+          ),
+        }
+      }
+
+      const redundant = await rejectIfConnected(
+        resolveAuthorizeSource(inputs, current, realOAuthDeps),
+      )
+      if (redundant) return redundant
 
       if (current.length > 0) {
         try {
@@ -139,6 +164,17 @@ function oauth(
               )
             }
             const fileAccounts = readAllClaudeAccounts()
+            const importedSource = resolveAuthorizeSource(
+              inputs,
+              fileAccounts,
+              realOAuthDeps,
+            )
+            if (
+              importedSource !== undefined &&
+              (await isConnected(importedSource))
+            ) {
+              throw new Error(describeAlreadyConnected(importedSource))
+            }
             const value = await authorizeOAuth(
               inputs,
               fileAccounts,
@@ -208,11 +244,33 @@ export const ClaudeAuthPlugin = Plugin.define({
       }
     }
 
+    const connectedSources = async (): Promise<string[]> => {
+      try {
+        const result = await ctx.integration.get({
+          integrationID: INTEGRATION_ID,
+        })
+        const sources: string[] = []
+        for (const connection of result.data.connections ?? []) {
+          try {
+            const value = await ctx.integration.connection.resolve(connection)
+            const source = credentialSource(value)
+            if (source) sources.push(source)
+          } catch (cause) {
+            log("connection_resolve_failed", { cause: String(cause) })
+          }
+        }
+        return sources
+      } catch (cause) {
+        log("connection_list_failed", { cause: String(cause) })
+        return []
+      }
+    }
+
     await ctx.integration.transform((draft) => {
       draft.update(INTEGRATION_ID, (integration) => {
         integration.name = "Anthropic"
       })
-      draft.method.update(oauth(accounts, setNeedsAuth))
+      draft.method.update(oauth(accounts, setNeedsAuth, connectedSources))
     })
 
     // The Anthropic integration keeps its built-in API-key method alongside
